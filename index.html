@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>🐰🦊 東京七日協作手帳 v11.0</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Noto+Serif+TC:wght+400;700&display=swap" rel="stylesheet">
+
+    <style>
+        /* 馬卡龍色系主題 */
+        :root { 
+            --primary-soft: #FFDDE2; --primary-dark: #FF9AA2;
+            --accent-soft: #D4F1F4; --accent-dark: #82D4BB;
+            --bg-light: #FFFFFF; --bg-earth: #F8F8F8;
+            --text-dark: #5C5C5C; --text-gray: #B0B0B0;
+            --selected-dark: #FF9AA2; --action-high-contrast: #FF6B6B; --progress-high: #FF6B6B;
+            
+            --expense-food-bg: #FFDDC1; --expense-food-text: #F7A380;
+            --expense-transport-bg: #D4EBF2; --expense-transport-text: #89CFF0;
+            --expense-shopping-bg: #E3D9ED; --expense-shopping-text: #B19CD9;
+            --expense-leisure-bg: #D9F1D5; --expense-leisure-text: #A0E6BA;
+            --expense-other-bg: #F0F0F0; --expense-other-text: #999999;
+        }
+        body { font-family: 'Noto Sans TC', sans-serif; background-color: var(--bg-earth); color: var(--text-dark); -webkit-tap-highlight-color: transparent; }
+        h1, h2, h3, .serif { font-family: 'Noto Serif TC', serif; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .card-shadow { box-shadow: 0 4px 15px -1px rgba(0, 0, 0, 0.05), 0 2px 8px -1px rgba(0, 0, 0, 0.03); }
+        .glass-nav { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+        .weather-float { animation: float 6s ease-in-out infinite; }
+        @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+        
+        /* Utility Classes */
+        .bg-primary-soft { background-color: var(--primary-soft); } .text-primary-dark { color: var(--primary-dark); }
+        .bg-accent-soft { background-color: var(--accent-soft); } .text-accent-dark { color: var(--accent-dark); }
+        .shadow-primary-soft { box-shadow: 0 10px 15px -3px rgba(255, 154, 162, 0.3), 0 4px 6px -2px rgba(255, 154, 162, 0.05); }
+        .bg-action-high-contrast { background-color: var(--action-high-contrast); }
+        .expense-header-card { background-image: linear-gradient(to right top, #FFECD2, #FCB69F); border-radius: 2rem; box-shadow: 0 8px 20px -5px rgba(252, 182, 159, 0.6); padding: 1.5rem; color: var(--text-dark); }
+        
+        /* Expense Category Colors */
+        .expense-cat-food-bg { background-color: var(--expense-food-bg); } .expense-cat-food-text { color: var(--expense-food-text); }
+        .expense-cat-transport-bg { background-color: var(--expense-transport-bg); } .expense-cat-transport-text { color: var(--expense-transport-text); }
+        .expense-cat-shopping-bg { background-color: var(--expense-shopping-bg); } .expense-cat-shopping-text { color: var(--expense-shopping-text); }
+        .expense-cat-leisure-bg { background-color: var(--expense-leisure-bg); } .expense-cat-leisure-text { color: var(--expense-leisure-text); }
+        .expense-cat-other-bg { background-color: var(--expense-other-bg); } .expense-cat-other-text { color: var(--expense-other-text); }
+
+        /* Sync Status Indicator */
+        .sync-status { position: fixed; top: 1rem; left: 50%; transform: translateX(-50%); z-index: 60; padding: 4px 12px; border-radius: 20px; font-size: 10px; font-weight: bold; transition: all 0.3s; opacity: 0; pointer-events: none; }
+        .sync-status.show { opacity: 1; top: 4.5rem; }
+        .sync-online { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+        .sync-offline { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+        .sync-saving { background: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe; }
+    </style>
+</head>
+<body class="h-screen overflow-hidden flex flex-col text-[var(--text-dark)]">
+
+    <div id="app" class="h-full flex flex-col max-w-md mx-auto bg-[var(--bg-earth)] shadow-2xl relative w-full rounded-[3rem] overflow-hidden border border-primary-soft">
+        
+        <div class="sync-status" :class="[syncStatusClass, { show: showSyncStatus }]">
+            <i :class="syncStatusIcon"></i> {{ syncStatusText }}
+        </div>
+
+        <header class="glass-nav px-6 py-4 z-20 flex justify-between items-center shrink-0 sticky top-0">
+            <div>
+                <h1 class="text-xl font-bold tracking-widest text-[var(--text-dark)] flex items-center gap-2">
+                    <span class="text-3xl">🐰</span> {{ currentTitle }} <span class="text-3xl">🦊</span> 
+                </h1>
+                <p class="text-[10px] text-[var(--text-gray)] tracking-wider uppercase font-sans">
+                    Cloud Sync v11.0
+                </p>
+            </div>
+            <div class="flex gap-3">
+                <button v-if="activeTab === 'itinerary'" @click="showMapList = true" class="bg-white border border-gray-100 text-[var(--text-gray)] px-3 py-1.5 rounded-full text-xs font-bold shadow-sm active:scale-95 transition flex items-center gap-2 hover:bg-primary-soft/30 hover:text-primary-dark">
+                    <i class="fa-solid fa-map-location-dot"></i> 路線
+                </button>
+                <button @click="showSettings = true" class="text-[var(--text-gray)] hover:text-primary-dark transition w-8 h-8 flex items-center justify-center rounded-full hover:bg-primary-soft/30">
+                    <i class="fa-solid fa-sliders text-lg"></i>
+                </button>
+            </div>
+        </header>
+
+        <main class="flex-1 overflow-y-auto hide-scrollbar p-5 pb-28 relative">
+            
+            <div v-if="activeTab === 'itinerary'" class="space-y-6">
+                <div class="flex gap-3 overflow-x-auto pb-2 hide-scrollbar snap-x">
+                    <button v-for="(day, index) in days" :key="day.id" @click="currentDayIndex = index"
+                        :class="currentDayIndex === index ? 'bg-[var(--selected-dark)] text-white shadow-lg scale-105 shadow-primary-soft' : 'bg-white text-[var(--text-gray)] border border-gray-100'"
+                        class="px-5 py-3 rounded-2xl transition-all duration-300 flex-shrink-0 flex flex-col items-center min-w-[5rem] snap-center font-bold">
+                        <span class="font-serif font-bold text-lg">D{{ index + 1 }}</span>
+                        <span class="text-[10px] uppercase tracking-wider opacity-80">{{ getDisplayDate(index) }}</span>
+                    </button>
+                </div>
+
+                <div v-if="currentDayWeather" class="bg-primary-soft/30 rounded-3xl p-5 text-primary-dark card-shadow relative overflow-hidden border border-primary-soft">
+                    <div class="relative z-10 flex justify-between items-start">
+                        <div>
+                            <div class="flex items-center gap-2 mb-1 opacity-70 text-sm"><i class="fa-solid fa-location-dot text-xs"></i><span class="font-bold tracking-widest uppercase">Tokyo Forecast</span></div>
+                            <div class="flex items-baseline gap-2"><span class="text-4xl font-serif font-bold text-[var(--text-dark)]">{{ currentDayWeather.maxTemp }}°</span><span class="text-sm opacity-60">/ {{ currentDayWeather.minTemp }}°</span></div>
+                            <p class="text-sm font-medium mt-1 text-primary-dark">{{ currentDayWeather.desc }}</p>
+                            <div class="mt-3 inline-flex items-center gap-2 bg-white/70 backdrop-blur-md px-3 py-1.5 rounded-full text-xs text-primary-dark shadow-sm"><i :class="currentDayWeather.adviceIcon" class="text-primary-dark"></i><span>{{ currentDayWeather.advice }}</span></div>
+                        </div>
+                        <div class="text-6xl text-primary-soft/80 weather-float absolute -right-4 -top-4"><i :class="currentDayWeather.icon"></i></div>
+                    </div>
+                </div>
+
+                <div v-if="currentDayItems.length === 0" class="flex flex-col items-center justify-center py-12 text-[var(--text-gray)]">
+                    <i class="fa-thin fa-pen-nib text-4xl mb-3"></i>
+                    <p class="serif">寫下旅程的第一頁...</p>
+                    <button @click="openModal('addItinerary')" class="mt-4 text-xs border-b border-gray-300 pb-0.5 text-[var(--text-gray)] hover:text-primary-dark">新增行程</button>
+                </div>
+                <div v-else class="space-y-4 pl-4"> 
+                    <div v-for="item in sortedDayItems" :key="item.id" class="flex gap-4 group">
+                        <div class="flex flex-col items-center mt-1">
+                            <div class="w-2 h-2 rounded-full bg-accent-dark group-hover:bg-primary-soft transition-colors"></div>
+                            <div class="w-px h-full bg-accent-soft my-1 group-last:hidden"></div>
+                        </div>
+                        <div class="flex-1 pb-4 cursor-pointer" @click="editItinerary(item)">
+                            <div class="flex justify-between items-baseline mb-1">
+                                <span class="font-serif font-bold text-lg text-[var(--text-dark)]">{{ formatTime(item.time) }}</span>
+                                <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <a :href="`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(item.location)}`" target="_blank" @click.stop class="text-[var(--text-gray)] hover:text-primary-dark w-8 h-8 flex items-center justify-center rounded-full active:bg-primary-soft/30 transition"><i class="fa-solid fa-diamond-turn-right"></i></a>
+                                    <button @click.stop="promptForConfirmation('刪除此行程？', () => deleteItinerary(item.id))" class="text-[var(--text-gray)] hover:text-accent-dark w-8 h-8 flex items-center justify-center rounded-full active:bg-primary-soft/30 transition"><i class="fa-solid fa-trash-can"></i></button>
+                                </div>
+                            </div>
+                            <div class="bg-[var(--bg-light)] p-4 rounded-2xl card-shadow transition-transform active:scale-[0.99] border-l-4 border-primary-dark">
+                                <h3 class="font-bold text-[var(--text-dark)] mb-1">{{ item.location }}</h3>
+                                <div v-if="item.needBooking" class="inline-flex items-center gap-1 text-[10px] text-accent-dark bg-accent-soft/50 px-2 py-0.5 rounded-full mb-2"><i class="fa-solid" :class="item.isBooked ? 'fa-check-circle' : 'fa-ticket'"></i>{{ item.isBooked ? '已完成預訂' : '需預訂/購票' }}</div>
+                                <p v-if="item.note" class="text-sm text-gray-500 leading-relaxed font-light">{{ item.note }}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div v-if="activeTab === 'prep'" class="space-y-6">
+                <div class="bg-[var(--bg-light)] p-5 rounded-3xl card-shadow border border-primary-soft border-l-8 border-accent-dark">
+                    <h2 class="serif text-lg font-bold mb-4 text-[var(--text-dark)]">準備進度</h2>
+                    <div class="mb-4">
+                        <div class="flex justify-between text-xs mb-1"><span class="text-gray-500">預訂</span><span class="font-bold">{{ bookingProgress }}%</span></div>
+                        <div class="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div class="h-full transition-all duration-700 bg-accent-dark" :style="{ width: bookingProgress + '%' }"></div></div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-xs mb-1"><span class="text-gray-500">行李</span><span class="font-bold">{{ packingProgress }}%</span></div>
+                        <div class="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div class="h-full transition-all duration-700 bg-primary-dark" :style="{ width: packingProgress + '%' }"></div></div>
+                    </div>
+                </div>
+                 <div class="space-y-3">
+                    <h3 class="text-xs font-bold text-primary-dark uppercase tracking-widest ml-1"><i class="fa-solid fa-ticket text-accent-dark"></i> 預訂清單</h3>
+                    <div v-if="bookingItems.length === 0" class="text-center py-6 border border-dashed border-gray-200 rounded-2xl text-[var(--text-gray)] text-xs">無預訂項目</div>
+                    <div v-for="item in bookingItems" :key="item.id" @click="toggleBookingStatus(item)" class="bg-[var(--bg-light)] p-4 rounded-xl border border-gray-100 shadow-sm cursor-pointer flex items-center gap-3">
+                        <div :class="item.isBooked ? 'bg-accent-dark border-accent-dark' : 'bg-white border-gray-300'" class="w-5 h-5 rounded border flex items-center justify-center transition-colors shrink-0"><i v-if="item.isBooked" class="fa-solid fa-check text-white text-[10px]"></i></div>
+                        <div class="flex-1"><p class="text-sm font-bold text-[var(--text-dark)]" :class="{'opacity-50 line-through': item.isBooked}">{{ item.location }}</p></div>
+                    </div>
+                </div>
+                <div class="space-y-3 pt-4 border-t border-gray-100">
+                    <h3 class="text-xs font-bold text-primary-dark uppercase tracking-widest ml-1"><i class="fa-solid fa-suitcase text-primary-dark"></i> 行李清單</h3>
+                    <button v-if="packingList.length === 0" @click="loadDefaultPackingList" class="w-full py-3 border border-dashed border-gray-300 rounded-xl text-[var(--text-gray)] text-sm">+ 匯入常用清單</button>
+                    <div v-for="item in packingList" :key="item.id" class="flex items-center gap-3 bg-[var(--bg-light)] px-4 py-3 rounded-xl border border-gray-100 shadow-sm cursor-pointer" @click="item.checked = !item.checked">
+                        <div :class="item.checked ? 'bg-primary-dark border-primary-dark' : 'bg-transparent border-gray-300'" class="w-5 h-5 rounded-full border flex items-center justify-center shrink-0"><i v-if="item.checked" class="fa-solid fa-check text-white text-[10px]"></i></div>
+                        <span :class="{'opacity-40 line-through': item.checked}" class="text-[var(--text-dark)] text-sm">{{ item.name }}</span>
+                        <button @click.stop="deletePackingItem(item.id)" class="ml-auto text-gray-300 hover:text-red-400"><i class="fa-solid fa-times"></i></button>
+                    </div>
+                    <div class="flex gap-2 mt-2"><input v-model="newPackingItem" placeholder="新增物品..." class="flex-1 bg-transparent border-b border-gray-200 py-2 px-1 text-sm outline-none focus:border-primary-dark"><button @click="addPackingItem" class="text-[var(--text-gray)] hover:text-primary-dark"><i class="fa-solid fa-plus"></i></button></div>
+                </div>
+            </div>
+
+            <div v-if="activeTab === 'translate'" class="space-y-6">
+                 <div class="flex gap-2 overflow-x-auto hide-scrollbar pb-1 px-1">
+                    <button v-for="cat in phraseCategories" :key="cat.id" @click="currentPhraseCat = cat.id" :class="currentPhraseCat === cat.id ? 'bg-[var(--selected-dark)] text-white shadow-md' : 'bg-white text-[var(--text-gray)] border border-gray-200'" class="flex-1 px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all">{{ cat.name }}</button>
+                </div>
+                <div class="space-y-3 pb-20">
+                    <div v-for="(phrase, idx) in currentPhrases" :key="idx" @click="speak(phrase.ja)" class="bg-[var(--bg-light)] p-4 rounded-2xl card-shadow border border-gray-100 flex justify-between items-center active:bg-primary-soft/30 cursor-pointer group transition-all">
+                        <div class="pr-4">
+                            <p class="text-base font-bold text-[var(--text-dark)] mb-1">{{ phrase.zh }}</p>
+                            <p class="text-sm text-gray-600 font-serif bg-gray-50 inline-block px-2 py-1 rounded">{{ phrase.ja }}</p>
+                        </div>
+                        <div class="w-12 h-12 rounded-full flex items-center justify-center text-gray-300 bg-gray-50 group-hover:text-primary-dark"><i class="fa-solid fa-volume-high"></i></div>
+                    </div>
+                </div>
+            </div>
+
+            <div v-if="activeTab === 'expenses'" class="space-y-6">
+                <div class="flex gap-2 mb-4 bg-white p-2 rounded-2xl shadow-sm border border-gray-100 sticky top-0 z-10">
+                    <button @click="currentExpenseTab = 'details'" :class="currentExpenseTab === 'details' ? 'bg-[var(--selected-dark)] text-white shadow-md' : 'text-[var(--text-dark)] hover:bg-gray-100'" class="flex-1 py-2 rounded-xl text-sm font-bold transition-all"><i class="fa-solid fa-list-ul"></i> 明細</button>
+                    <button @click="currentExpenseTab = 'add'; resetExpenseForm()" :class="currentExpenseTab === 'add' ? 'bg-[var(--selected-dark)] text-white shadow-md' : 'text-[var(--text-dark)] hover:bg-gray-100'" class="flex-1 py-2 rounded-xl text-sm font-bold transition-all"><i class="fa-solid fa-pencil"></i> 記帳</button>
+                </div>
+
+                <div v-if="currentExpenseTab === 'details'" class="space-y-6">
+                    <div class="expense-header-card">
+                        <div class="flex justify-between items-center mb-2">
+                            <h2 class="text-xl font-bold text-[var(--text-dark)]">總支出 (TWD)</h2>
+                            <span class="text-xs text-[var(--text-dark)] opacity-70 flex flex-col items-end">
+                                <span>1 JPY ≈ {{ exchangeRate }} TWD</span>
+                                <span class="text-[8px] mt-0.5">{{ exchangeRateTimestamp }} 更新</span>
+                            </span>
+                        </div>
+                        <p class="text-4xl font-serif font-bold text-primary-dark mt-1">NT$ {{ totalTwdExpense.toLocaleString() }}</p>
+                    </div>
+                    
+                    <div class="bg-[var(--bg-light)] p-5 rounded-3xl shadow-xl shadow-primary-soft/50 relative overflow-hidden border border-gray-100">
+                        <h2 class="serif font-bold text-[var(--text-dark)] mb-4">現金預算 (日幣)</h2>
+                        <div v-for="(b, key) in budgets" :key="key" class="mb-3">
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="text-gray-500 font-bold uppercase">{{ budgetLabels[key] }}</span>
+                                <span class="font-bold text-[var(--text-dark)]">¥ {{ usedCashBudget(key).toLocaleString() }} / {{ b.toLocaleString() }}</span>
+                            </div>
+                            <div class="h-2 bg-gray-100 rounded-full overflow-hidden">
+                                <div class="h-full transition-all duration-700 rounded-full" :class="getBudgetProgressClass(key, cashBudgetProgress(key))" :style="{ width: cashBudgetProgress(key) + '%' }"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="space-y-3 pt-4">
+                        <div class="flex gap-2 overflow-x-auto hide-scrollbar pb-1 px-1">
+                             <button @click="selectedPayer = 'All'" :class="selectedPayer === 'All' ? 'bg-[var(--selected-dark)] text-white' : 'bg-gray-100'" class="px-4 py-2 rounded-xl text-sm font-bold">全體</button>
+                             <button @click="selectedPayer = '兔子🐰'" :class="selectedPayer === '兔子🐰' ? 'bg-[var(--selected-dark)] text-white' : 'bg-gray-100'" class="px-4 py-2 rounded-xl text-sm font-bold">兔子🐰</button>
+                             <button @click="selectedPayer = '狐狸🦊'" :class="selectedPayer === '狐狸🦊' ? 'bg-[var(--selected-dark)] text-white' : 'bg-gray-100'" class="px-4 py-2 rounded-xl text-sm font-bold">狐狸🦊</button>
+                        </div>
+                        <div v-for="(group, date) in groupedExpenses" :key="date" class="mb-6">
+                            <div class="flex justify-between items-center mb-3">
+                                <span class="text-xs font-bold text-primary-dark bg-primary-soft/50 px-3 py-1 rounded-full shadow-sm">{{ formatDateShort(date) }}</span>
+                                <span class="text-xs text-[var(--text-gray)]">NT$ {{ group.totalTwd.toLocaleString() }}</span>
+                            </div>
+                            <div class="space-y-3">
+                                <div v-for="exp in group.items" :key="exp.id" class="bg-[var(--bg-light)] p-4 rounded-2xl card-shadow flex justify-between items-center relative group">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm" :class="getExpenseClass(exp.type).bg"><i :class="getExpenseClass(exp.type).icon"></i></div>
+                                        <div><p class="font-bold text-sm">{{ exp.title }}</p><div class="flex items-center gap-2 text-[10px] text-gray-400 mt-1"><span>{{ exp.payer }}</span> <span v-if="exp.isShared">(共)</span></div></div>
+                                    </div>
+                                    <div class="text-right"><p class="font-bold text-sm">{{ exp.currency }} {{ exp.originalAmount.toLocaleString() }}</p></div>
+                                    <button @click="promptForConfirmation('刪除紀錄？', () => deleteExpense(exp.id))" class="absolute right-0 top-0 bottom-0 w-12 bg-red-100 text-red-500 translate-x-full group-hover:translate-x-0 transition-transform flex items-center justify-center"><i class="fa-solid fa-trash"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                     <div class="bg-[var(--bg-light)] p-5 rounded-3xl card-shadow border border-gray-100 border-l-8 border-accent-dark mt-6">
+                        <h3 class="serif font-bold text-xl mb-3 text-accent-dark">共同支出結算</h3>
+                        <div class="text-sm space-y-2">
+                             <div class="flex justify-between"><span class="text-gray-500">總共同支出</span><span class="font-bold">¥ {{ settlementSummary.totalShared.toLocaleString() }}</span></div>
+                             <div class="flex justify-between"><span class="text-gray-500">兔子代墊</span><span class="font-bold">¥ {{ settlementSummary.bunnyPaid.toLocaleString() }}</span></div>
+                             <div class="flex justify-between"><span class="text-gray-500">狐狸代墊</span><span class="font-bold">¥ {{ settlementSummary.foxiePaid.toLocaleString() }}</span></div>
+                        </div>
+                        <div class="mt-4 pt-4 border-t border-gray-100" v-if="settlementSummary.settlementAmount !== 0">
+                            <p class="text-lg font-bold">最終結算:</p>
+                            <p class="text-xl font-serif mt-1 text-accent-dark">
+                                {{ settlementSummary.settlementAmount > 0 ? '🦊 應付 🐰' : '🐰 應付 🦊' }} 
+                                <span class="text-2xl font-bold">NT$ {{ Math.round(Math.abs(settlementSummary.settlementAmount) * exchangeRate).toLocaleString() }}</span>
+                                <br><span class="text-xs text-gray-400 font-sans">(¥ {{ Math.abs(settlementSummary.settlementAmount).toLocaleString() }})</span>
+                            </p>
+                        </div>
+                        <div class="mt-4 pt-4 border-t border-gray-100" v-else><p class="text-xl font-serif text-primary-dark">兩人已結清!</p></div>
+                    </div>
+                </div>
+
+                <div v-if="currentExpenseTab === 'add'" class="space-y-6 p-4 bg-[var(--bg-light)] rounded-3xl card-shadow">
+                     <h3 class="serif font-bold text-xl mb-4 text-primary-dark border-b pb-3">記帳輸入</h3>
+                     <div class="space-y-4">
+                        <div><label class="text-xs font-bold text-gray-400">日期</label><input type="date" v-model="formExpense.date" class="w-full bg-gray-100 p-3 rounded-xl"></div>
+                        <div><label class="text-xs font-bold text-gray-400">金額</label><div class="flex gap-2"><input type="number" v-model.number="formExpense.originalAmount" class="flex-1 bg-gray-100 p-3 rounded-xl"><select v-model="formExpense.currency" class="bg-gray-100 p-3 rounded-xl font-bold"><option value="JPY">JPY</option><option value="TWD">TWD</option></select></div></div>
+                        <div><label class="text-xs font-bold text-gray-400">項目</label><input type="text" v-model="formExpense.title" class="w-full bg-gray-100 p-3 rounded-xl"></div>
+                        <div class="grid grid-cols-2 gap-3"><div><label class="text-xs font-bold text-gray-400">付款人</label><select v-model="formExpense.payer" class="w-full bg-gray-100 p-3 rounded-xl"><option v-for="m in members" :value="m">{{m}}</option></select></div><div><label class="text-xs font-bold text-gray-400">類別</label><select v-model="formExpense.type" class="w-full bg-gray-100 p-3 rounded-xl"><option value="food">飲食</option><option value="transport">交通</option><option value="shopping">購物</option><option value="leisure">娛樂</option><option value="other">其他</option></select></div></div>
+                        <div><label class="text-xs font-bold text-gray-400 mb-1 block">付款方式</label><div class="flex gap-2"><button v-for="method in ['cash', 'creditCard', 'suica']" :key="method" @click="formExpense.paymentMethod = method" :class="formExpense.paymentMethod === method ? 'bg-[var(--selected-dark)] text-white' : 'bg-gray-100'" class="flex-1 py-2 rounded-xl text-xs font-bold transition-colors">{{ getPaymentMethodLabel(method) }}</button></div></div>
+                        <label class="flex items-center gap-2 p-3 bg-gray-100 rounded-xl"><input type="checkbox" v-model="formExpense.isShared" class="accent-primary-dark w-4 h-4"><span class="text-sm">是否為共同支出？</span></label>
+                     </div>
+                     <button @click="saveAndSwitchToDetails" class="w-full bg-[var(--action-high-contrast)] text-white py-3 rounded-xl mt-6 font-bold">記錄並查看</button>
+                </div>
+            </div>
+
+        </main>
+
+        <button v-if="activeTab !== 'translate' && activeTab !== 'expenses'" @click="openModal('addItinerary')" class="absolute bottom-24 right-5 w-14 h-14 bg-[var(--action-high-contrast)] text-white rounded-full shadow-2xl flex items-center justify-center text-xl hover:scale-105 active:scale-95 transition-all z-30"><i class="fa-solid fa-pen-fancy"></i></button>
+        <nav class="glass-nav h-20 pb-safe flex justify-around items-center shrink-0 z-40 px-2">
+            <button v-for="tab in tabs" :key="tab.id" @click="activeTab = tab.id" class="flex flex-col items-center w-1/4 py-2 transition-all duration-300 relative">
+                <div :class="activeTab === tab.id ? 'text-primary-dark -translate-y-1' : 'text-[var(--text-gray)]'" class="transition-transform duration-300 text-xl mb-1"><i :class="tab.icon"></i></div>
+                <span :class="activeTab === tab.id ? 'opacity-100 font-bold text-primary-dark' : 'opacity-60 text-[var(--text-gray)]'" class="text-[10px] tracking-widest">{{ tab.name }}</span>
+            </button>
+        </nav>
+
+        <div v-if="showMapList" class="fixed inset-0 bg-gray-900/40 z-50 flex items-end sm:items-center justify-center backdrop-blur-sm" @click.self="showMapList=false"><div class="bg-[var(--bg-light)] w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl animate-in slide-in-from-bottom duration-300 max-h-[85vh] overflow-y-auto"><div class="flex justify-between items-center mb-4"><h3 class="serif font-bold text-xl">🗺️ 導航助手</h3><button @click="showMapList=false"><i class="fa-solid fa-times text-gray-400"></i></button></div><button @click="getCurrentLocation" class="w-full mb-6 bg-blue-50 text-blue-600 border border-blue-100 py-3 rounded-xl flex items-center justify-center gap-2 font-bold hover:bg-blue-100 transition shadow-sm"><i class="fa-solid fa-crosshairs"></i> 📍 定位並顯示我的位置</button><div v-for="(dayItems, idx) in allItinerariesByDay" :key="idx" class="mb-6 relative"><h4 class="text-xs font-bold text-[var(--text-dark)] bg-primary-soft inline-block px-3 py-1 rounded-full mb-4 shadow-md z-10 relative">Day {{ getDayNumberForMap(idx) }}</h4><div class="absolute left-4 top-10 bottom-0 w-0.5 bg-accent-soft z-0"></div><div class="space-y-4 pl-1"><a v-for="item in dayItems" :key="item.id" :href="`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(item.location)}`" target="_blank" class="flex items-center justify-between p-3 ml-6 bg-white rounded-xl border border-gray-100 shadow-sm hover:bg-primary-soft/30 active:scale-95 transition relative z-10"><div class="absolute -left-[1.65rem] top-1/2 -translate-y-1/2 w-3 h-3 bg-primary-dark rounded-full border-2 border-[var(--bg-light)]"></div><div><span class="block text-[10px] text-accent-dark font-bold">{{ formatTime(item.time) }}</span><span class="font-bold text-[var(--text-dark)] text-sm">{{ item.location }}</span></div><div class="text-[var(--text-gray)] text-xs flex items-center gap-1"><i class="fa-solid fa-location-arrow"></i> 導航</div></a></div></div></div></div>
+        <div v-if="showSettings" class="fixed inset-0 bg-gray-900/40 z-50 flex items-end sm:items-center justify-center backdrop-blur-sm" @click.self="showSettings=false"><div class="bg-[var(--bg-light)] w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl animate-in slide-in-from-bottom duration-300"><h3 class="serif font-bold text-xl mb-4 text-primary-dark">旅程設定</h3><div class="space-y-4 text-sm"><div><label class="block text-xs font-bold text-[var(--text-gray)] mb-1">出發日期</label><input type="date" v-model="startDate" class="w-full bg-gray-100 p-3 rounded-xl"></div><div><label class="block text-xs font-bold text-[var(--text-gray)] mb-1">即時匯率</label><div class="flex items-center gap-3"><input type="number" step="0.0001" v-model.number="exchangeRate" class="flex-1 bg-gray-100 p-3 rounded-xl"><button @click="fetchExchangeRate" class="px-3 py-1.5 rounded-full text-xs font-bold bg-accent-soft text-accent-dark">重抓</button></div></div><div class="grid grid-cols-2 gap-3"><div><label class="block text-xs font-bold text-[var(--text-gray)] mb-1">🐰 預算</label><input type="number" v-model.number="budgets.bunny" class="w-full bg-gray-100 p-3 rounded-xl"></div><div><label class="block text-xs font-bold text-[var(--text-gray)] mb-1">🦊 預算</label><input type="number" v-model.number="budgets.foxie" class="w-full bg-gray-100 p-3 rounded-xl"></div></div></div><div class="mt-6 pt-4 border-t border-gray-100 text-right"><button @click="promptForConfirmation('清除並重置所有資料？', resetData)" class="text-xs text-red-400 hover:text-red-600 underline">清除資料 (雲端)</button></div></div></div>
+        <div v-if="showItineraryModal" class="fixed inset-0 bg-gray-900/40 z-50 flex items-end sm:items-center justify-center backdrop-blur-sm" @click.self="showItineraryModal=false"><div class="bg-[var(--bg-light)] w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl animate-in slide-in-from-bottom duration-300"><h3 class="serif font-bold text-xl mb-4 text-primary-dark">{{ editingItem ? '編輯行程' : '新增行程' }}</h3><div class="space-y-4"><div class="grid grid-cols-2 gap-3"><div><label class="block text-xs font-bold text-[var(--text-gray)] mb-1">時間</label><input type="time" v-model="formItinerary.time" class="w-full bg-gray-100 p-3 rounded-xl"></div><div><label class="block text-xs font-bold text-[var(--text-gray)] mb-1">地點</label><input type="text" v-model="formItinerary.location" class="w-full bg-gray-100 p-3 rounded-xl"></div></div><label class="flex items-center gap-2 p-3 bg-gray-100 rounded-xl"><input type="checkbox" v-model="formItinerary.needBooking" class="accent-primary-dark w-4 h-4"><span class="text-sm">需預訂？</span></label><textarea v-model="formItinerary.note" placeholder="備註..." class="w-full bg-gray-100 p-3 rounded-xl resize-none h-20"></textarea></div><button @click="saveItinerary" class="w-full bg-[var(--action-high-contrast)] text-white py-3 rounded-xl mt-4 font-bold">儲存</button></div></div>
+        <div v-if="showConfirmation" class="fixed inset-0 bg-gray-900/40 z-50 flex items-end sm:items-center justify-center backdrop-blur-sm" @click.self="cancelAction"><div class="bg-[var(--bg-light)] w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl animate-in slide-in-from-bottom duration-300"><h3 class="serif font-bold text-xl mb-4 text-primary-dark">確認</h3><p class="mb-6 text-sm">{{ confirmationMessage }}</p><div class="flex gap-3"><button @click="cancelAction" class="flex-1 bg-gray-200 text-gray-600 py-3 rounded-xl font-bold">取消</button><button @click="confirmAction" class="flex-1 bg-action-high-contrast text-white py-3 rounded-xl font-bold">確定</button></div></div></div>
+
+    </div>
+
+    <script type="module">
+        // Import Vue functions
+        const { createApp, ref, computed, watch, onMounted, nextTick } = Vue;
+        
+        // Import Firebase (Modular SDK)
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getDatabase, ref as dbRef, onValue, set } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+
+        // 🔴 請在這裡填入 Firebase 設定 (Step 1 取得的內容)
+        const firebaseConfig = {
+            apiKey: "AIzaSyBeNUW6ciEo0VohJSoYkoDcxAkjYk8RqG0",
+            authDomain: "tokyotrip2026-77839.firebaseapp.com",
+            databaseURL: "https://tokyotrip2026-77839-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "tokyotrip2026-77839",
+            storageBucket: "tokyotrip2026-77839.firebasestorage.app",
+            messagingSenderId: "617977736248",
+            appId: "1:617977736248:web:1c81cf1e71e6dfd921cacd",
+            measurementId: "G-JM5N3LGTNP"
+        };
+
+        createApp({
+            setup() {
+                // Initialize Firebase
+                let db = null;
+                let dataRef = null;
+                let isRemoteUpdate = false; // Flag to prevent infinite loop (App->DB->App->DB)
+                const syncStatusText = ref('離線模式');
+                const syncStatusClass = ref('sync-offline');
+                const syncStatusIcon = ref('fa-solid fa-wifi-slash');
+                const showSyncStatus = ref(false);
+
+                // --- Initial Data ---
+                const totalDays = 7;
+                const getInitialDays = () => Array.from({ length: totalDays }, (_, i) => ({ id: i + 1, items: [], weather: { icon: 'fa-solid fa-spinner fa-spin', maxTemp: '--', minTemp: '--', desc: 'Loading...', advice: '取得資料中...', adviceIcon: 'fa-solid fa-sync' } }));
+                const getInitialState = () => ({
+                    startDate: new Date().toISOString().slice(0, 10),
+                    members: ['兔子🐰', '狐狸🦊'],
+                    budgets: { bunny: 50000, foxie: 50000 },
+                    exchangeRate: 0.2100,
+                    exchangeRateTimestamp: '預設',
+                    days: getInitialDays(),
+                    expenses: [],
+                    packingList: [],
+                });
+
+                // State
+                const state = ref(getInitialState());
+                // Spread refs for template usage (backward compatibility with v10 structure)
+                const startDate = computed({ get: () => state.value.startDate, set: v => state.value.startDate = v });
+                const members = computed({ get: () => state.value.members, set: v => state.value.members = v });
+                const budgets = computed({ get: () => state.value.budgets, set: v => state.value.budgets = v });
+                const exchangeRate = computed({ get: () => state.value.exchangeRate, set: v => state.value.exchangeRate = v });
+                const exchangeRateTimestamp = computed({ get: () => state.value.exchangeRateTimestamp, set: v => state.value.exchangeRateTimestamp = v });
+                const days = computed({ get: () => state.value.days, set: v => state.value.days = v });
+                const expenses = computed({ get: () => state.value.expenses, set: v => state.value.expenses = v });
+                const packingList = computed({ get: () => state.value.packingList, set: v => state.value.packingList = v });
+
+                // UI State
+                const activeTab = ref('itinerary');
+                const tabs = [{ id: 'itinerary', name: '行程', icon: 'fa-solid fa-calendar-check' }, { id: 'prep', name: '準備', icon: 'fa-solid fa-suitcase' }, { id: 'translate', name: '翻譯', icon: 'fa-solid fa-language' }, { id: 'expenses', name: '記帳', icon: 'fa-solid fa-wallet' }];
+                const showSettings = ref(false), showItineraryModal = ref(false), showMapList = ref(false), showConfirmation = ref(false);
+                const currentDayIndex = ref(0);
+                const currentExpenseTab = ref('details'); 
+                const selectedPayer = ref('All'); 
+                const confirmationMessage = ref('');
+                const confirmationCallback = ref(null);
+                const formItinerary = ref({ time: '09:00', location: '', note: '', needBooking: false, isBooked: false });
+                const editingItem = ref(null);
+                const formExpense = ref({ title: '', originalAmount: null, payer: '兔子🐰', type: 'food', currency: 'JPY', paymentMethod: 'cash', date: new Date().toISOString().slice(0,10), isShared: false });
+                const newPackingItem = ref('');
+                const phraseCategories = [{ id: 'basic', name: '基礎' }, { id: 'cvs', name: '超商' }, { id: 'dining', name: '餐廳' }, { id: 'shopping', name: '購物' }];
+                const currentPhraseCat = ref('basic');
+                const phraseData = { basic: [{ zh: '您好', ja: 'こんにちは', romaji: 'Konnichiwa' }, { zh: '謝謝', ja: 'ありがとうございます', romaji: 'Arigatou' }], cvs: [{ zh: '請幫我加熱', ja: '温めてください', romaji: 'Atatamete' }], dining: [{ zh: '兩位', ja: '二人です', romaji: 'Futari' }, { zh: '結帳', ja: 'お会計', romaji: 'Okaikei' }], shopping: [{ zh: '免稅', ja: '免税', romaji: 'Menzei' }] };
+                const budgetLabels = { bunny: '兔子🐰', foxie: '狐狸🦊' };
+
+                // --- Firebase Logic ---
+                const initFirebase = () => {
+                    try {
+                        const app = initializeApp(firebaseConfig);
+                        db = getDatabase(app);
+                        // Using a single node 'tokyo_trip_data' to sync everything
+                        dataRef = dbRef(db, 'tokyo_trip_data');
+
+                        // 1. Listen for changes from Firebase
+                        onValue(dataRef, (snapshot) => {
+                            const val = snapshot.val();
+                            if (val) {
+                                isRemoteUpdate = true; // Mark as remote update
+                                updateSyncStatus('online');
+                                // Deep merge or replace state
+                                state.value = { ...state.value, ...val };
+                                // Reset days if structure is missing
+                                if (!state.value.days) state.value.days = getInitialDays();
+                                if (!state.value.expenses) state.value.expenses = [];
+                                if (!state.value.packingList) state.value.packingList = [];
+
+                                state.value.days.forEach(day => {
+                                    if (!day.items) {
+                                        day.items = []; // 即使從 Firebase 載入是 undefined，也強制設為 []
+                                    }
+                                });
+                                
+                                nextTick(() => isRemoteUpdate = false); // Unlock after DOM update
+                            } else {
+                                // First time? Init DB
+                                saveToFirebase(true);
+                            }
+                        }, (error) => {
+                            console.error(error);
+                            updateSyncStatus('offline');
+                        });
+                    } catch (e) {
+                        console.error("Firebase init failed:", e);
+                        updateSyncStatus('offline');
+                    }
+                };
+
+                const saveToFirebase = (force = false) => {
+                    if (isRemoteUpdate && !force) return; // Don't save if we just loaded from remote
+                    if (!db) return;
+
+                    updateSyncStatus('saving');
+                    // Clean object to plain JSON (remove Vue proxies)
+                    const dataToSave = JSON.parse(JSON.stringify(state.value));
+                    
+                    set(dataRef, dataToSave)
+                        .then(() => setTimeout(() => updateSyncStatus('online'), 500))
+                        .catch(e => {
+                            console.error(e);
+                            updateSyncStatus('offline');
+                        });
+                };
+
+                const updateSyncStatus = (status) => {
+                    showSyncStatus.value = true;
+                    if (status === 'online') {
+                        syncStatusText.value = '已同步'; syncStatusClass.value = 'sync-online'; syncStatusIcon.value = 'fa-solid fa-check';
+                        setTimeout(() => showSyncStatus.value = false, 2000);
+                    } else if (status === 'saving') {
+                        syncStatusText.value = '儲存中...'; syncStatusClass.value = 'sync-saving'; syncStatusIcon.value = 'fa-solid fa-cloud-arrow-up';
+                    } else {
+                        syncStatusText.value = '連線中斷'; syncStatusClass.value = 'sync-offline'; syncStatusIcon.value = 'fa-solid fa-triangle-exclamation';
+                    }
+                };
+
+                // Watch for ANY change in state and sync to Firebase
+                // Debounce simple implementation
+                let saveTimeout;
+                watch(state, () => {
+                    if (isRemoteUpdate) return;
+                    clearTimeout(saveTimeout);
+                    saveTimeout = setTimeout(() => saveToFirebase(), 1000); // Save after 1 sec of inactivity
+                }, { deep: true });
+
+                // --- Regular App Logic ---
+                const fetchRealWeather = async () => {
+                    // (Simplified logic for brevity - keeping v10 features)
+                    const lat = 35.6895, lon = 139.6917;
+                    let start = new Date(startDate.value), now = new Date();
+                    if ((start - now)/(1e3*60*60*24) > 10) start = now;
+                    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=weathercode,temperature_2m_max,temperature_2m_min&timezone=Asia%2FTokyo&start_date=${start.toISOString().slice(0,10)}&end_date=${new Date(start.getTime()+6*24*3600*1000).toISOString().slice(0,10)}`;
+                    try {
+                        const res = await fetch(url); const data = await res.json();
+                        if (data.daily) data.daily.weathercode.forEach((c, i) => { if(days.value[i]) days.value[i].weather = mapWmoCode(c, data.daily.temperature_2m_max[i], data.daily.temperature_2m_min[i]); });
+                    } catch(e) {}
+                };
+                const mapWmoCode = (c, max, min) => {
+                    let w = { maxTemp: Math.round(max), minTemp: Math.round(min) };
+                    if(c===0) return {...w, icon:'fa-solid fa-sun', desc:'晴', advice:'防曬'};
+                    if([1,2,3].includes(c)) return {...w, icon:'fa-solid fa-cloud', desc:'多雲', advice:'舒適'};
+                    if(c>3) return {...w, icon:'fa-solid fa-umbrella', desc:'有雨', advice:'帶傘'};
+                    return w;
+                }
+
+                const fetchExchangeRate = async () => {
+                    try {
+                        const res = await fetch('https://api.exchangerate-api.com/v4/latest/JPY');
+                        const data = await res.json();
+                        exchangeRate.value = data.rates.TWD.toFixed(4);
+                        exchangeRateTimestamp.value = new Date().toLocaleTimeString('zh-TW', {hour:'2-digit', minute:'2-digit'});
+                    } catch(e) {}
+                };
+
+                onMounted(() => {
+                    initFirebase(); // Init DB listener
+                    fetchRealWeather();
+                    fetchExchangeRate();
+                });
+
+                // Logic Helpers
+                const resetData = () => {
+                    state.value = getInitialState(); // Watcher will trigger and save to Firebase
+                };
+                const openModal = (t) => { if(t==='addItinerary') { editingItem.value=null; formItinerary.value={time:'09:00', location:'', note:'', needBooking:false, isBooked:false}; showItineraryModal.value=true; }};
+                const saveItinerary = () => { if(!formItinerary.value.location)return; if(editingItem.value) Object.assign(editingItem.value, formItinerary.value); else days.value[currentDayIndex.value].items.push({id:Date.now(), ...formItinerary.value}); showItineraryModal.value=false; };
+                const deleteItinerary = (id) => { const d = days.value[currentDayIndex.value]; d.items = d.items.filter(i=>i.id!==id); };
+                const editItinerary = (item) => { editingItem.value=item; formItinerary.value={...item}; showItineraryModal.value=true; };
+                
+                const resetExpenseForm = () => formExpense.value = { title:'', originalAmount:null, payer:'兔子🐰', type:'food', currency:'JPY', paymentMethod:'cash', date:new Date().toISOString().slice(0,10), isShared:false };
+                const saveAndSwitchToDetails = () => { if(!formExpense.value.title || !formExpense.value.originalAmount)return; let amount = formExpense.value.currency==='TWD' ? Math.round(formExpense.value.originalAmount/exchangeRate.value) : formExpense.value.originalAmount; expenses.value.unshift({id:Date.now(), ...formExpense.value, amount}); resetExpenseForm(); currentExpenseTab.value='details'; };
+                const deleteExpense = (id) => expenses.value = expenses.value.filter(e=>e.id!==id);
+                
+                const loadDefaultPackingList = () => { const def=['護照','現金','手機','充電器','衣物','盥洗包']; packingList.value = [...packingList.value, ...def.map((n,i)=>({id:Date.now()+i, name:n, checked:false}))]; };
+                const addPackingItem = () => { if(newPackingItem.value) packingList.value.push({id:Date.now(), name:newPackingItem.value, checked:false}); newPackingItem.value=''; };
+                const deletePackingItem = (id) => packingList.value = packingList.value.filter(i=>i.id!==id);
+
+                const promptForConfirmation = (msg, cb) => { confirmationMessage.value=msg; confirmationCallback.value=cb; showConfirmation.value=true; };
+                const confirmAction = () => { if(confirmationCallback.value) confirmationCallback.value(); showConfirmation.value=false; };
+                const cancelAction = () => showConfirmation.value=false;
+                const getCurrentLocation = () => { navigator.geolocation.getCurrentPosition(p=>window.open(`https://www.google.com/maps/search/?api=1&query=$${p.coords.latitude},${p.coords.longitude}`,'_blank')); };
+                const speak = (txt) => { const u=new SpeechSynthesisUtterance(txt); u.lang='ja-JP'; speechSynthesis.speak(u); };
+
+                // Computeds
+                const currentTitle = computed(() => ({itinerary:`Day ${currentDayIndex.value+1} 行程`, prep:'行前準備', translate:'旅行翻譯', expenses:'記帳管家'}[activeTab.value]));
+                const currentDayWeather = computed(() => days.value[currentDayIndex.value].weather);
+                const currentDayItems = computed(() => {
+                    // 關鍵修正：如果 ?.items 返回 undefined，則使用 || [] 返回空陣列
+                    return days.value[currentDayIndex.value]?.items || []; 
+                });
+                const sortedDayItems = computed(() => {
+                    const items = days.value[currentDayIndex.value]?.items || []; // 確保是陣列
+                    return [...items].sort((a, b) => a.time.localeCompare(b.time));
+                });
+                const bookingItems = computed(() => days.value.flatMap((d,i)=>d.items.filter(x=>x.needBooking).map(x=>({...x, dayIdx:i}))));
+                const bookingProgress = computed(() => bookingItems.value.length ? Math.round((bookingItems.value.filter(i=>i.isBooked).length/bookingItems.value.length)*100) : 100);
+                const packingProgress = computed(() => packingList.value.length ? Math.round((packingList.value.filter(i=>i.checked).length/packingList.value.length)*100) : 0);
+                const totalTwdExpense = computed(() => expenses.value.reduce((s,e)=>s+(e.currency==='JPY'?e.amount*exchangeRate.value:e.originalAmount),0));
+                const filteredExpenses = computed(() => { let f=expenses.value; if(selectedPayer.value==='共同')f=f.filter(e=>e.isShared); else if(selectedPayer.value!=='All')f=f.filter(e=>e.payer===selectedPayer.value&&!e.isShared); return f.sort((a,b)=>new Date(b.date)-new Date(a.date)); });
+                const groupedExpenses = computed(() => { const g={}; filteredExpenses.value.forEach(e=>{ if(!g[e.date])g[e.date]={items:[], totalTwd:0}; g[e.date].items.push(e); g[e.date].totalTwd+=(e.currency==='JPY'?e.amount*exchangeRate.value:e.originalAmount); }); return g; });
+                const usedCashBudget = (k) => expenses.value.filter(e=>e.paymentMethod==='cash'&&!e.isShared&&e.payer===budgetLabels[k]).reduce((s,e)=>s+e.amount,0);
+                const cashBudgetProgress = (k) => budgets.value[k] ? (usedCashBudget(k)/budgets.value[k])*100 : 0;
+                const settlementSummary = computed(() => { const shared=expenses.value.filter(e=>e.isShared); const total=shared.reduce((s,e)=>s+e.amount,0); const bp=shared.filter(e=>e.payer==='兔子🐰').reduce((s,e)=>s+e.amount,0); return { totalShared:total, bunnyPaid:bp, foxiePaid:total-bp, settlementAmount:Math.round(bp - total/2) }; });
+                const allItinerariesByDay = computed(() => days.value.map(d => d.items.slice().sort((a,b)=>a.time.localeCompare(b.time))).filter(i=>i.length));
+
+                return {
+                    state, startDate, members, budgets, exchangeRate, exchangeRateTimestamp, days, expenses, packingList,
+                    activeTab, tabs, showSettings, showItineraryModal, showMapList, showConfirmation, currentDayIndex, currentExpenseTab,
+                    currentDayWeather, currentDayItems, sortedDayItems, bookingItems, bookingProgress, packingProgress,
+                    currentTitle, formItinerary, formExpense, newPackingItem, openModal, saveItinerary, deleteItinerary, editItinerary,
+                    resetExpenseForm, saveAndSwitchToDetails, deleteExpense, selectedPayer, phraseCategories, currentPhraseCat, currentPhrases: computed(() => phraseData[currentPhraseCat.value]), speak,
+                    loadDefaultPackingList, addPackingItem, deletePackingItem, promptForConfirmation, confirmAction, cancelAction, confirmationMessage,
+                    resetData, fetchExchangeRate, getCurrentLocation, allItinerariesByDay,
+                    getDisplayDate: i=>{const d=new Date(startDate.value); d.setDate(d.getDate()+i); return d.toLocaleDateString('zh-TW',{month:'short',day:'numeric'})}, formatTime: t=>t, formatDateShort: d=>new Date(d).toLocaleDateString('zh-TW',{month:'short',day:'numeric'}), getDayNumberForMap: i=>i+1, toggleBookingStatus: item=>{const i=days.value[item.dayIdx].items.find(x=>x.id===item.id); if(i)i.isBooked=!i.isBooked},
+                    getExpenseClass: t=>({food:{icon:'fa-solid fa-utensils',bg:'expense-cat-food-bg'},transport:{icon:'fa-solid fa-train',bg:'expense-cat-transport-bg'},shopping:{icon:'fa-solid fa-bag-shopping',bg:'expense-cat-shopping-bg'},leisure:{icon:'fa-solid fa-ticket',bg:'expense-cat-leisure-bg'},other:{icon:'fa-solid fa-ellipsis',bg:'expense-cat-other-bg'}}[t]||{icon:'fa-solid fa-question',bg:'bg-gray-400'}), getPaymentMethodLabel: m=>({creditCard:'信用卡',cash:'現金',suica:'西瓜卡'}[m]), getBudgetProgressClass: (t,p)=>p>=90?'bg-[var(--progress-high)]':'bg-gray-400', budgetLabels, usedCashBudget, cashBudgetProgress, settlementSummary, totalTwdExpense, groupedExpenses,
+                    // Sync Status
+                    syncStatusText, syncStatusClass, syncStatusIcon, showSyncStatus
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
