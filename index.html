@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>🐰🦊 東京七日協作手帳 v12.0</title>
+    <title>🐰🦊 東京七日協作手帳 v12.2</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
@@ -21,7 +21,7 @@
             
             --expense-food-bg: #FFDDC1; --expense-food-text: #F7A380;
             --expense-transport-bg: #D4EBF2; --expense-transport-text: #89CFF0;
-            --expense-shopping-bg: #E3D9ED; --expense-shopping-text: #B19CD9;
+            --expense-shopping-bg: #E3D9ED; --expense-cat-shopping-text: #B19CD9;
             --expense-leisure-bg: #D9F1D5; --expense-leisure-text: #A0E6BA;
             --expense-other-bg: #F0F0F0; --expense-other-text: #999999;
         }
@@ -60,7 +60,7 @@
         /* Expense Category Colors */
         .expense-cat-food-bg { background-color: var(--expense-food-bg); } .expense-cat-food-text { color: var(--expense-food-text); }
         .expense-cat-transport-bg { background-color: var(--expense-transport-bg); } .expense-cat-transport-text { color: var(--expense-transport-text); }
-        .expense-cat-shopping-bg { background-color: var(--expense-shopping-bg); } .expense-cat-shopping-text { color: var(--expense-shopping-text); }
+        .expense-cat-shopping-bg { background-color: var(--expense-shopping-bg); } .expense-cat-shopping-text { color: var(--expense-cat-shopping-text); }
         .expense-cat-leisure-bg { background-color: var(--expense-leisure-bg); } .expense-cat-leisure-text { color: var(--expense-leisure-text); }
         .expense-cat-other-bg { background-color: var(--expense-other-bg); } .expense-cat-other-text { color: var(--expense-other-text); }
 
@@ -90,7 +90,7 @@
                     <span class="text-3xl">🐰</span> {{ currentTitle }} <span class="text-3xl">🦊</span> 
                 </h1>
                 <p class="text-[10px] text-[var(--text-gray)] tracking-wider uppercase font-sans">
-                    Cloud Sync v12.0
+                    Cloud Sync v12.2
                 </p>
             </div>
             <div class="flex gap-3">
@@ -142,7 +142,7 @@
                             <div class="flex justify-between items-baseline mb-1">
                                 <span class="font-serif font-bold text-lg text-[var(--text-dark)]">{{ formatTime(item.time) }}</span>
                                 <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <a :href="`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(item.location)}`" target="_blank" @click.stop class="text-[var(--text-gray)] hover:text-primary-dark w-8 h-8 flex items-center justify-center rounded-full active:bg-primary-soft/30 transition"><i class="fa-solid fa-diamond-turn-right"></i></a>
+                                    <a :href="`https://www.google.com/maps/dir/?api=1&destination=$${encodeURIComponent(item.location)}`" target="_blank" @click.stop class="text-[var(--text-gray)] hover:text-primary-dark w-8 h-8 flex items-center justify-center rounded-full active:bg-primary-soft/30 transition"><i class="fa-solid fa-diamond-turn-right"></i></a>
                                     <button v-if="isEditor" @click.stop="promptForConfirmation('刪除此行程？', () => deleteItinerary(item.id))" class="text-[var(--text-gray)] hover:text-accent-dark w-8 h-8 flex items-center justify-center rounded-full active:bg-primary-soft/30 transition"><i class="fa-solid fa-trash-can"></i></button>
                                 </div>
                             </div>
@@ -452,7 +452,7 @@
                 // Initialize Firebase
                 let db = null;
                 let dataRef = null;
-                let isRemoteUpdate = false; // Flag to prevent infinite loop (App->DB->App->DB)
+                let isRemoteUpdate = false; 
                 const syncStatusText = ref('離線模式');
                 const syncStatusClass = ref('sync-offline');
                 const syncStatusIcon = ref('fa-solid fa-wifi-slash');
@@ -479,7 +479,6 @@
 
                 // State
                 const state = ref(getInitialState());
-                // Spread refs for template usage (backward compatibility with v10 structure)
                 const startDate = computed({ get: () => state.value.startDate, set: v => state.value.startDate = v });
                 const members = computed({ get: () => state.value.members, set: v => state.value.members = v });
                 const budgets = computed({ get: () => state.value.budgets, set: v => state.value.budgets = v });
@@ -502,23 +501,79 @@
                 const editingItem = ref(null);
                 const formExpense = ref({ title: '', originalAmount: null, payer: '兔子🐰', type: 'food', currency: 'JPY', paymentMethod: 'cash', date: new Date().toISOString().slice(0,10), isShared: false });
                 const newPackingItem = ref('');
-                const phraseCategories = [{ id: 'basic', name: '基礎' }, { id: 'cvs', name: '超商' }, { id: 'dining', name: '餐廳' }, { id: 'shopping', name: '購物' }];
+                
+                // 🆕 擴充後的語音分類與內容
+                const phraseCategories = [
+                    { id: 'basic', name: '基礎' }, 
+                    { id: 'transit', name: '交通' }, // New Category
+                    { id: 'dining', name: '點餐/結帳' }, 
+                    { id: 'shopping', name: '購物/服務' }, // Updated Category
+                    { id: 'emergency', name: '緊急/求助' } // New Category
+                ];
                 const currentPhraseCat = ref('basic');
-                const phraseData = { basic: [{ zh: '您好', ja: 'こんにちは', romaji: 'Konnichiwa' }, { zh: '謝謝', ja: 'ありがとうございます', romaji: 'Arigatou' }], cvs: [{ zh: '請幫我加熱', ja: '温めてください', romaji: 'Atatamete' }], dining: [{ zh: '兩位', ja: '二人です', romaji: 'Futari' }, { zh: '結帳', ja: 'お会計', romaji: 'Okaikei' }], shopping: [{ zh: '免稅', ja: '免税', romaji: 'Menzei' }] };
+                const phraseData = { 
+                    basic: [
+                        { zh: '您好', ja: 'こんにちは', romaji: 'Konnichiwa' }, 
+                        { zh: '謝謝', ja: 'ありがとうございます', romaji: 'Arigatou gozaimasu' },
+                        { zh: '對不起/不好意思', ja: 'すみません', romaji: 'Sumimasen' },
+                        { zh: '再見', ja: 'さようなら', romaji: 'Sayounara' },
+                        { zh: '沒關係', ja: '大丈夫です', romaji: 'Daijoubu desu' },
+                        { zh: '請給我這個', ja: 'これをください', romaji: 'Kore o kudasai' }
+                    ], 
+                    transit: [
+                        { zh: '請問車站/月台在哪裡？', ja: '駅/ホームはどこですか？', romaji: 'Eki/Hoomu wa doko desu ka?' },
+                        { zh: '請問到新宿的車票', ja: '新宿までの切符をください', romaji: 'Shinjuku made no kippu o kudasai' },
+                        { zh: '這個位子有人坐嗎？', ja: 'この席は空いていますか？', romaji: 'Kono seki wa aite imasu ka?' },
+                        { zh: '可以幫我叫計程車嗎？', ja: 'タクシーを呼んでくれますか？', romaji: 'Takushii o yonde kuremasu ka?' },
+                        { zh: '請問這是往哪裡去的？', ja: 'これはどこ行きですか？', romaji: 'Kore wa doko yuki desu ka?' }
+                    ], 
+                    dining: [
+                        { zh: '兩位/三位', ja: '二人/三人です', romaji: 'Futari/sannin desu' }, 
+                        { zh: '可以點餐了嗎？', ja: '注文してもいいですか？', romaji: 'Chuumon shite mo ii desu ka?' },
+                        { zh: '請給我菜單', ja: 'メニューをください', romaji: 'Menyuu o kudasai' },
+                        { zh: '請幫我加熱', ja: '温めてください', romaji: 'Atatamete kudasai' },
+                        { zh: '可以外帶嗎？', ja: '持ち帰りはできますか？', romaji: 'Mochikaeri wa dekimasu ka?' },
+                        { zh: '結帳', ja: 'お会計をお願いします', romaji: 'Okaikei o onegaishimasu' }
+                    ], 
+                    shopping: [
+                        { zh: '請問有免稅服務嗎？', ja: '免税はできますか？', romaji: 'Menzei wa dekimasu ka?' },
+                        { zh: '這個多少錢？', ja: 'これはいくらですか？', romaji: 'Kore wa ikura desu ka?' },
+                        { zh: '可以試穿嗎？', ja: '試着してもいいですか？', romaji: 'Shichaku shite mo ii desu ka?' },
+                        { zh: '我想退/換貨', ja: '返品/交換したいです', romaji: 'Henpin/koukan shitai desu' },
+                        { zh: '請幫我包裝', ja: 'ラッピングをお願いします', romaji: 'Rappingu o onegaishimasu' }
+                    ],
+                    emergency: [
+                        { zh: '請幫我叫警察/救護車', ja: '警察/救急車を呼んでください', romaji: 'Keisatsu/Kyuukyuusha o yonde kudasai' },
+                        { zh: '我找不到我的護照', ja: 'パスポートをなくしました', romaji: 'Pasupooto o nakushimashita' },
+                        { zh: '我身體不舒服', ja: '気分が悪いです', romaji: 'Kibun ga warui desu' },
+                        { zh: '請問有會說中文的人嗎？', ja: '中国語が話せる人はいますか？', romaji: 'Chuugokugo ga hanaseru hito wa imasu ka?' }
+                    ]
+                };
                 const budgetLabels = { bunny: '兔子🐰', foxie: '狐狸🦊' };
                 
                 // 🆕 New State for Expense UI & Converter
                 const expenseDisplayMode = ref('summary'); // 'summary' or 'budget'
                 const jpyInput = ref(null); // For currency converter
 
-                // --- 1. Audio Playing Logic ---
-                const currentPlayingPhrase = ref(null); // Track which phrase is playing
+                // --- 1. 🛠️ 語音播放修正邏輯 ---
+                const currentPlayingPhrase = ref(null); 
                 const speak = (txt) => {
-                    if (window.speechSynthesis.speaking) window.speechSynthesis.cancel(); // Stop current
+                    if (window.speechSynthesis.speaking) window.speechSynthesis.cancel();
                     
                     const u = new SpeechSynthesisUtterance(txt);
-                    u.lang = 'ja-JP';
+                    // 🚨 修正關鍵：明確指定日文 (ja-JP) 語言包
+                    u.lang = 'ja-JP'; 
                     
+                    // 嘗試尋找並設定一個日文發音人，以提高行動裝置的相容性
+                    const voices = window.speechSynthesis.getVoices();
+                    const japaneseVoice = voices.find(voice => voice.lang === 'ja-JP');
+                    if (japaneseVoice) {
+                        u.voice = japaneseVoice;
+                    } else {
+                        // 如果找不到特定語音，至少 lang 設置正確
+                        console.warn("Japanese voice not found on device, using default for ja-JP lang.");
+                    }
+
                     // Set active state
                     currentPlayingPhrase.value = txt;
                     
@@ -527,7 +582,7 @@
                         currentPlayingPhrase.value = null;
                     };
                     u.onerror = () => {
-                        currentPlayingPhrase.value = null; // Reset on error too
+                        currentPlayingPhrase.value = null; 
                     };
 
                     window.speechSynthesis.speak(u);
@@ -558,7 +613,7 @@
                             if (val) {
                                 isRemoteUpdate = true; 
                                 updateSyncStatus('online');
-                                // Deep merge or replace state
+                                
                                 state.value = { ...state.value, ...val };
                                 
                                 // Robust check: Initialize missing structures
@@ -575,8 +630,10 @@
                                 
                                 nextTick(() => isRemoteUpdate = false); 
                             } else {
-                                // First time? Init DB
-                                saveToFirebase(true);
+                                // 如果 Firebase 資料庫是空的 (val === null)，
+                                // 則不執行 saveToFirebase(true)，避免將本地的空狀態覆蓋到雲端。
+                                // 這樣如果只是連線問題，資料不會被清除。
+                                console.log("Firebase data is empty or unavailable. Using local initial state but NOT overwriting cloud data.");
                             }
                         }, (error) => {
                             console.error(error);
@@ -692,7 +749,7 @@
                 const promptForConfirmation = (msg, cb) => { confirmationMessage.value=msg; confirmationCallback.value=cb; showConfirmation.value=true; };
                 const confirmAction = () => { if(confirmationCallback.value) confirmationCallback.value(); showConfirmation.value=false; };
                 const cancelAction = () => showConfirmation.value=false;
-                const getCurrentLocation = () => { navigator.geolocation.getCurrentPosition(p=>window.open(`https://www.google.com/maps/search/?api=1&query=$${p.coords.latitude},${p.coords.longitude}`,'_blank')); };
+                const getCurrentLocation = () => { navigator.geolocation.getCurrentPosition(p=>window.open(`https://www.google.com/maps/search/?api=1&query=$$${p.coords.latitude},${p.coords.longitude}`,'_blank')); };
                 
                 // Computeds
                 const currentTitle = computed(() => ({itinerary:`Day ${currentDayIndex.value+1} 行程`, prep:'行前準備', translate:'旅行翻譯', expenses:'記帳管家'}[activeTab.value]));
@@ -726,10 +783,10 @@
                 // 3. 🆕 Refined Cash Budget Logic: Only count JPY Cash transactions
                 const usedCashBudget = (k) => expenses.value.filter(e => 
                     e.paymentMethod === 'cash' &&
-                    e.currency === 'JPY' && // <--- NEW CONDITION
+                    e.currency === 'JPY' && 
                     !e.isShared &&
                     e.payer === budgetLabels[k]
-                ).reduce((s, e) => s + e.amount, 0); // Amount is in JPY
+                ).reduce((s, e) => s + e.amount, 0); 
 
                 const cashBudgetProgress = (k) => budgets.value[k] ? (usedCashBudget(k)/budgets.value[k])*100 : 0;
                 const settlementSummary = computed(() => { const shared=expenses.value.filter(e=>e.isShared); const total=shared.reduce((s,e)=>s+e.amount,0); const bp=shared.filter(e=>e.payer==='兔子🐰').reduce((s,e)=>s+e.amount,0); return { totalShared:total, bunnyPaid:bp, foxiePaid:total-bp, settlementAmount:Math.round(bp - total/2) }; });
