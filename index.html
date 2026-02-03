@@ -633,7 +633,14 @@
                                 // 如果 Firebase 資料庫是空的 (val === null)，
                                 // 則不執行 saveToFirebase(true)，避免將本地的空狀態覆蓋到雲端。
                                 // 這樣如果只是連線問題，資料不會被清除。
-                                console.log("Firebase data is empty or unavailable. Using local initial state but NOT overwriting cloud data.");
+                                console.log("Firebase data is empty. Checking local backup...");
+                                const backup = localStorage.getItem('tokyo_trip_backup');
+                                if (backup) {
+                                    state.value = JSON.parse(backup);
+                                    console.log("✅ 已從本地備份恢復資料。");
+                                } else {
+                                    console.log("No local backup found. Using initial state.");
+                                }
                             }
                         }, (error) => {
                             console.error(error);
@@ -648,12 +655,29 @@
                 const saveToFirebase = (force = false) => {
                     if (isRemoteUpdate && !force) return; 
                     if (!db) return;
-
+                
+                    // 🛡️ 第一層：實體內容檢查
+                    // 檢查 days 裡面是否有任何一個天數包含行程 items
+                    const hasData = state.value.days && 
+                                    state.value.days.some(day => day.items && day.items.length > 0);
+                
+                    // 如果行程是空的，且不是強制儲存，就攔截它，防止覆蓋雲端
+                    if (!hasData && !force) {
+                        console.warn("⚠️ 偵測到本地行程為空，已攔截存檔動作以保護雲端資料。");
+                        return; 
+                    }
+                
                     updateSyncStatus('saving');
                     const dataToSave = JSON.parse(JSON.stringify(state.value));
                     
                     set(dataRef, dataToSave)
-                        .then(() => setTimeout(() => updateSyncStatus('online'), 500))
+                        .then(() => {
+                            // 🛡️ 第二層：本地自動備份
+                            // 雲端存成功後，在瀏覽器也存一份，萬一哪天沒網或雲端壞了還能救
+                            localStorage.setItem('tokyo_trip_backup', JSON.stringify(dataToSave));
+                            
+                            setTimeout(() => updateSyncStatus('online'), 500);
+                        })
                         .catch(e => {
                             console.error("Firebase SET failed:", e);
                             updateSyncStatus('offline');
@@ -816,3 +840,4 @@
     </script>
 </body>
 </html>
+
